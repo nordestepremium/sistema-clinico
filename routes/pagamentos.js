@@ -1,0 +1,72 @@
+const express = require('express');
+const { queryComoClinica } = require('../db');
+const { exigirLogin } = require('../middleware/auth');
+
+const router = express.Router();
+router.use(exigirLogin);
+
+router.get('/', async (req, res) => {
+  const { dataInicio, dataFim } = req.query;
+  try {
+    const result = await queryComoClinica(
+      req.clinicaId,
+      `SELECT * FROM pagamentos
+       WHERE ($1::text IS NULL OR data_pagamento >= $1)
+         AND ($2::text IS NULL OR data_pagamento <= $2)
+       ORDER BY data_pagamento DESC`,
+      [dataInicio || null, dataFim || null]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ erro: 'Erro ao buscar pagamentos.' });
+  }
+});
+
+router.post('/', async (req, res) => {
+  const p = req.body;
+  try {
+    const result = await queryComoClinica(
+      req.clinicaId,
+      `INSERT INTO pagamentos
+        (clinica_id, usuario_id, paciente_id, paciente_nome, data_pagamento, competencia,
+         valor, descricao, tipo, origem, referencia)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+      [req.clinicaId, req.usuarioId, p.paciente_id || null, p.paciente_nome, p.data_pagamento,
+       p.competencia, p.valor, p.descricao, p.tipo || 'sessao', p.origem || 'manual', p.referencia]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ erro: 'Erro ao criar pagamento.' });
+  }
+});
+
+router.put('/:id', async (req, res) => {
+  const p = req.body;
+  try {
+    const result = await queryComoClinica(
+      req.clinicaId,
+      `UPDATE pagamentos SET paciente_nome=$1, data_pagamento=$2, competencia=$3,
+        valor=$4, descricao=$5, tipo=$6 WHERE id=$7 RETURNING *`,
+      [p.paciente_nome, p.data_pagamento, p.competencia, p.valor, p.descricao, p.tipo, req.params.id]
+    );
+    if (!result.rows[0]) return res.status(404).json({ erro: 'Pagamento não encontrado.' });
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ erro: 'Erro ao atualizar pagamento.' });
+  }
+});
+
+router.delete('/:id', async (req, res) => {
+  try {
+    await queryComoClinica(req.clinicaId, 'DELETE FROM pagamentos WHERE id=$1', [req.params.id]);
+    res.json({ sucesso: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ erro: 'Erro ao excluir pagamento.' });
+  }
+});
+
+module.exports = router;
