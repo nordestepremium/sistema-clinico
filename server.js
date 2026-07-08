@@ -9,8 +9,13 @@ const pacientesRoutes = require('./routes/pacientes');
 
 const app = express();
 
-app.use(helmet()); // cabeçalhos de segurança padrão
-app.use(cors());   // depois, restrinja para o domínio do seu app
+app.use(helmet());
+app.use(cors({
+  origin: true, // aceita a origem que fizer a requisição (o app desktop e o teste local)
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+app.options('*', cors()); // responde manualmente qualquer checagem de "preflight"
 app.use(express.json({ limit: '5mb' }));
 
 // Limita tentativas de login para dificultar ataques de força bruta
