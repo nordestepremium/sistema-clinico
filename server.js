@@ -6,6 +6,14 @@ const rateLimit = require('express-rate-limit');
 
 const authRoutes = require('./routes/auth');
 const pacientesRoutes = require('./routes/pacientes');
+const configRoutes = require('./routes/config');
+const perguntasRoutes = require('./routes/perguntasDinamicas');
+const anamnesesRoutes = require('./routes/anamneses');
+const evolucoesRoutes = require('./routes/evolucoes');
+const pagamentosRoutes = require('./routes/pagamentos');
+const despesasRoutes = require('./routes/despesas');
+const recebimentosRoutes = require('./routes/recebimentos');
+const usuariosRoutes = require('./routes/usuarios');
 
 const app = express();
 
@@ -24,6 +32,14 @@ app.use('/auth/login', loginLimiter);
 
 app.use('/auth', authRoutes);
 app.use('/pacientes', pacientesRoutes);
+app.use('/config', configRoutes);
+app.use('/perguntas-dinamicas', perguntasRoutes);
+app.use('/anamneses', anamnesesRoutes);
+app.use('/evolucoes', evolucoesRoutes);
+app.use('/pagamentos', pagamentosRoutes);
+app.use('/despesas', despesasRoutes);
+app.use('/recebimentos', recebimentosRoutes);
+app.use('/usuarios', usuariosRoutes);
 
 app.get('/', (req, res) => res.json({ status: 'ok' }));
 
