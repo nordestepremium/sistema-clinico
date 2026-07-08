@@ -47,9 +47,20 @@ router.put('/:id', async (req, res) => {
   try {
     const result = await queryComoClinica(
       req.clinicaId,
-      `UPDATE pagamentos SET paciente_nome=$1, data_pagamento=$2, competencia=$3,
-        valor=$4, descricao=$5, tipo=$6 WHERE id=$7 RETURNING *`,
-      [p.paciente_nome, p.data_pagamento, p.competencia, p.valor, p.descricao, p.tipo, req.params.id]
+      `UPDATE pagamentos SET
+        paciente_nome = COALESCE($1, paciente_nome),
+        data_pagamento = COALESCE($2, data_pagamento),
+        competencia = COALESCE($3, competencia),
+        valor = COALESCE($4, valor),
+        descricao = COALESCE($5, descricao),
+        tipo = COALESCE($6, tipo),
+        auto_recebimento = COALESCE($7, auto_recebimento),
+        referencia = COALESCE($8, referencia),
+        recibo_gerado = COALESCE($9, recibo_gerado)
+       WHERE id=$10 RETURNING *`,
+      [p.paciente_nome ?? null, p.data_pagamento ?? null, p.competencia ?? null, p.valor ?? null,
+       p.descricao ?? null, p.tipo ?? null, p.auto_recebimento ?? null, p.referencia ?? null,
+       p.recibo_gerado ?? null, req.params.id]
     );
     if (!result.rows[0]) return res.status(404).json({ erro: 'Pagamento não encontrado.' });
     res.json(result.rows[0]);
