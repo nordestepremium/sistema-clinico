@@ -57,7 +57,7 @@ router.post('/login', async (req, res) => {
       JWT_SECRET,
       { expiresIn: '12h' }
     );
-    res.json({ token, nome: usuario.nome, role: usuario.role });
+    res.json({ token, usuarioId: usuario.id, nome: usuario.nome, role: usuario.role });
   } catch (err) {
     console.error(err);
     res.status(500).json({ erro: 'Erro ao entrar.' });

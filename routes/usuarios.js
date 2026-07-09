@@ -11,6 +11,21 @@ function exigirAdmin(req, res, next) {
   next();
 }
 
+// Lista enxuta de profissionais da clínica — qualquer usuário logado pode ver
+// (usado pela agenda para saber quem são os profissionais disponíveis)
+router.get('/profissionais', async (req, res) => {
+  try {
+    const result = await queryComoClinica(
+      req.clinicaId,
+      "SELECT id, nome, role FROM usuarios WHERE role != 'recepcao' ORDER BY nome"
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ erro: 'Erro ao listar profissionais.' });
+  }
+});
+
 router.get('/', exigirAdmin, async (req, res) => {
   try {
     const result = await queryComoClinica(
