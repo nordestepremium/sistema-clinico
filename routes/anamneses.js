@@ -4,6 +4,10 @@ const { exigirLogin } = require('../middleware/auth');
 
 const router = express.Router();
 router.use(exigirLogin);
+router.use((req, res, next) => {
+  if (req.role === 'recepcao') return res.status(403).json({ erro: 'O perfil Recepção não pode acessar prontuários clínicos.' });
+  next();
+});
 
 // Todas as colunas de texto da anamnese, iguais às do schema_postgres.sql
 const COLUNAS = [
@@ -34,8 +38,11 @@ router.get('/:pacienteId', async (req, res) => {
   try {
     const result = await queryComoClinica(
       req.clinicaId,
-      'SELECT * FROM anamneses WHERE paciente_id=$1 ORDER BY created_at DESC LIMIT 1',
-      [req.params.pacienteId]
+      `SELECT a.* FROM anamneses a
+       JOIN pacientes p ON p.id = a.paciente_id
+       WHERE a.paciente_id=$1 AND p.usuario_id=$2
+       ORDER BY a.created_at DESC LIMIT 1`,
+      [req.params.pacienteId, req.usuarioId]
     );
     res.json(result.rows[0] || null);
   } catch (err) {
@@ -46,11 +53,14 @@ router.get('/:pacienteId', async (req, res) => {
 
 router.post('/', async (req, res) => {
   const body = req.body;
-  const campos = COLUNAS.filter(c => body[c] !== undefined);
-  const colunas = ['clinica_id', 'usuario_id', 'paciente_id', ...campos];
-  const valores = [req.clinicaId, req.usuarioId, body.paciente_id, ...campos.map(c => body[c])];
-  const placeholders = colunas.map((_, i) => `$${i + 1}`).join(',');
   try {
+    const dono = await queryComoClinica(req.clinicaId, 'SELECT id FROM pacientes WHERE id=$1 AND usuario_id=$2', [body.paciente_id, req.usuarioId]);
+    if (!dono.rows[0]) return res.status(403).json({ erro: 'Paciente não encontrado ou não pertence a você.' });
+
+    const campos = COLUNAS.filter(c => body[c] !== undefined);
+    const colunas = ['clinica_id', 'usuario_id', 'paciente_id', ...campos];
+    const valores = [req.clinicaId, req.usuarioId, body.paciente_id, ...campos.map(c => body[c])];
+    const placeholders = colunas.map((_, i) => `$${i + 1}`).join(',');
     const result = await queryComoClinica(
       req.clinicaId,
       `INSERT INTO anamneses (${colunas.join(',')}) VALUES (${placeholders}) RETURNING *`,
@@ -72,8 +82,8 @@ router.put('/:id', async (req, res) => {
   try {
     const result = await queryComoClinica(
       req.clinicaId,
-      `UPDATE anamneses SET ${sets}, updated_at=now() WHERE id=$${campos.length + 1} RETURNING *`,
-      [...valores, req.params.id]
+      `UPDATE anamneses SET ${sets}, updated_at=now() WHERE id=$${campos.length + 1} AND usuario_id=$${campos.length + 2} RETURNING *`,
+      [...valores, req.params.id, req.usuarioId]
     );
     if (!result.rows[0]) return res.status(404).json({ erro: 'Anamnese não encontrada.' });
     res.json(result.rows[0]);

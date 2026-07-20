@@ -11,10 +11,11 @@ router.get('/', async (req, res) => {
     const result = await queryComoClinica(
       req.clinicaId,
       `SELECT * FROM pagamentos
-       WHERE ($1::text IS NULL OR data_pagamento >= $1)
-         AND ($2::text IS NULL OR data_pagamento <= $2)
+       WHERE usuario_id=$1
+         AND ($2::text IS NULL OR data_pagamento >= $2)
+         AND ($3::text IS NULL OR data_pagamento <= $3)
        ORDER BY data_pagamento DESC`,
-      [dataInicio || null, dataFim || null]
+      [req.usuarioId, dataInicio || null, dataFim || null]
     );
     res.json(result.rows);
   } catch (err) {
@@ -57,10 +58,10 @@ router.put('/:id', async (req, res) => {
         auto_recebimento = COALESCE($7, auto_recebimento),
         referencia = COALESCE($8, referencia),
         recibo_gerado = COALESCE($9, recibo_gerado)
-       WHERE id=$10 RETURNING *`,
+       WHERE id=$10 AND usuario_id=$11 RETURNING *`,
       [p.paciente_nome ?? null, p.data_pagamento ?? null, p.competencia ?? null, p.valor ?? null,
        p.descricao ?? null, p.tipo ?? null, p.auto_recebimento ?? null, p.referencia ?? null,
-       p.recibo_gerado ?? null, req.params.id]
+       p.recibo_gerado ?? null, req.params.id, req.usuarioId]
     );
     if (!result.rows[0]) return res.status(404).json({ erro: 'Pagamento não encontrado.' });
     res.json(result.rows[0]);
@@ -72,7 +73,7 @@ router.put('/:id', async (req, res) => {
 
 router.delete('/:id', async (req, res) => {
   try {
-    await queryComoClinica(req.clinicaId, 'DELETE FROM pagamentos WHERE id=$1', [req.params.id]);
+    await queryComoClinica(req.clinicaId, 'DELETE FROM pagamentos WHERE id=$1 AND usuario_id=$2', [req.params.id, req.usuarioId]);
     res.json({ sucesso: true });
   } catch (err) {
     console.error(err);
