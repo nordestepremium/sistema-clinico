@@ -17,6 +17,8 @@ const usuariosRoutes = require('./routes/usuarios');
 
 const app = express();
 
+app.set('trust proxy', 1); // necessário no Render (e em qualquer host atrás de proxy/load balancer)
+
 app.use(helmet());
 app.use(cors({
   origin: true, // aceita a origem que fizer a requisição (o app desktop e o teste local)
