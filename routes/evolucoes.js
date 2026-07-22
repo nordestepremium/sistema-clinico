@@ -1,6 +1,9 @@
 const express = require('express');
 const { queryComoClinica } = require('../db');
 const { exigirLogin } = require('../middleware/auth');
+const { uploadArquivo, baixarArquivo, excluirArquivo } = require('../storage');
+
+const EXTENSOES_PERMITIDAS = { 'application/pdf': 'pdf', 'image/jpeg': 'jpg', 'image/png': 'png' };
 
 const router = express.Router();
 router.use(exigirLogin);
@@ -19,7 +22,22 @@ router.get('/:pacienteId', async (req, res) => {
        ORDER BY e.data_atendimento DESC`,
       [req.params.pacienteId, req.usuarioId]
     );
-    res.json(result.rows);
+    const evolucoes = result.rows;
+    if (evolucoes.length) {
+      const ids = evolucoes.map(e => e.id);
+      const docs = await queryComoClinica(
+        req.clinicaId,
+        `SELECT id, evolucao_id, nome_original, mime_type, tamanho, created_at
+           FROM evolucao_documentos WHERE evolucao_id = ANY($1::uuid[]) ORDER BY created_at DESC`,
+        [ids]
+      );
+      const porEvolucao = {};
+      docs.rows.forEach(d => {
+        (porEvolucao[d.evolucao_id] = porEvolucao[d.evolucao_id] || []).push(d);
+      });
+      evolucoes.forEach(e => { e.documentos = porEvolucao[e.id] || []; });
+    }
+    res.json(evolucoes);
   } catch (err) {
     console.error(err);
     res.status(500).json({ erro: 'Erro ao buscar evoluções.' });
@@ -68,6 +86,90 @@ router.delete('/:id', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ erro: 'Erro ao excluir evolução.' });
+  }
+});
+
+module.exports = router;
+
+// ── Documentos anexados (Supabase Storage) ──────────────────
+
+// Enviar um ou mais documentos para uma evolução
+router.post('/:evolucaoId/documentos', async (req, res) => {
+  const files = Array.isArray(req.body.files) ? req.body.files : [];
+  if (!files.length) return res.status(400).json({ erro: 'Nenhum arquivo enviado.' });
+  try {
+    const evolucao = await queryComoClinica(
+      req.clinicaId,
+      'SELECT id, paciente_id FROM evolucoes WHERE id=$1 AND usuario_id=$2',
+      [req.params.evolucaoId, req.usuarioId]
+    );
+    if (!evolucao.rows[0]) return res.status(404).json({ erro: 'Evolução não encontrada.' });
+    const pacienteId = evolucao.rows[0].paciente_id;
+
+    const inseridos = [];
+    for (const [index, file] of files.entries()) {
+      const mimeType = file.mimeType || 'application/octet-stream';
+      const ext = EXTENSOES_PERMITIDAS[mimeType];
+      if (!ext) return res.status(400).json({ erro: 'Formato inválido. Envie somente PDF, JPG ou PNG.' });
+
+      const buffer = Buffer.from(String(file.base64 || '').replace(/^data:.*;base64,/, ''), 'base64');
+      if (buffer.length > 8 * 1024 * 1024) return res.status(400).json({ erro: 'Cada arquivo deve ter no máximo 8MB.' });
+
+      const nomeOriginal = String(file.name || `documento.${ext}`).slice(0, 200);
+      const caminho = `clinicas/${req.clinicaId}/evolucoes/${req.params.evolucaoId}/${Date.now()}_${index}.${ext}`;
+      await uploadArquivo(caminho, buffer, mimeType);
+
+      const result = await queryComoClinica(
+        req.clinicaId,
+        `INSERT INTO evolucao_documentos
+          (clinica_id, usuario_id, paciente_id, evolucao_id, nome_original, nome_arquivo, mime_type, tamanho, caminho_arquivo)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id, evolucao_id, nome_original, mime_type, tamanho, created_at`,
+        [req.clinicaId, req.usuarioId, pacienteId, req.params.evolucaoId, nomeOriginal, caminho, mimeType, buffer.length, caminho]
+      );
+      inseridos.push(result.rows[0]);
+    }
+    res.status(201).json({ documentos: inseridos });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ erro: err.message || 'Erro ao enviar documentos.' });
+  }
+});
+
+// Baixar o conteúdo de um documento (em base64)
+router.get('/documentos/:docId/conteudo', async (req, res) => {
+  try {
+    const doc = await queryComoClinica(
+      req.clinicaId,
+      'SELECT * FROM evolucao_documentos WHERE id=$1 AND usuario_id=$2',
+      [req.params.docId, req.usuarioId]
+    );
+    if (!doc.rows[0]) return res.status(404).json({ erro: 'Documento não encontrado.' });
+    const buffer = await baixarArquivo(doc.rows[0].caminho_arquivo);
+    res.json({
+      nome_original: doc.rows[0].nome_original,
+      mime_type: doc.rows[0].mime_type,
+      base64: buffer.toString('base64')
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ erro: err.message || 'Erro ao baixar documento.' });
+  }
+});
+
+router.delete('/documentos/:docId', async (req, res) => {
+  try {
+    const doc = await queryComoClinica(
+      req.clinicaId,
+      'SELECT * FROM evolucao_documentos WHERE id=$1 AND usuario_id=$2',
+      [req.params.docId, req.usuarioId]
+    );
+    if (!doc.rows[0]) return res.status(404).json({ erro: 'Documento não encontrado.' });
+    await excluirArquivo(doc.rows[0].caminho_arquivo);
+    await queryComoClinica(req.clinicaId, 'DELETE FROM evolucao_documentos WHERE id=$1', [req.params.docId]);
+    res.json({ sucesso: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ erro: err.message || 'Erro ao excluir documento.' });
   }
 });
 
