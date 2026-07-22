@@ -73,7 +73,10 @@ router.post('/', async (req, res) => {
   }
 });
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 router.put('/:id', async (req, res) => {
+  if (!UUID_RE.test(req.params.id)) return res.status(400).json({ erro: 'ID de anamnese inválido.' });
   const body = req.body;
   const campos = COLUNAS.filter(c => body[c] !== undefined);
   if (!campos.length) return res.status(400).json({ erro: 'Nada para atualizar.' });
