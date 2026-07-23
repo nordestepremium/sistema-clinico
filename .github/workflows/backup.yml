@@ -1,1 +1,14 @@
-
+name: Backup diario do banco
+ 
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: "0 6 * * *"
+ 
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Chamar a rota de backup
+        run: curl -f -X POST "https://sistema-clinico-jyml.onrender.com/sistema/backup" -H "x-backup-secret: ${{ secrets.BACKUP_SECRET }}"
+ 
