@@ -27,4 +27,12 @@ async function excluirArquivo(caminho) {
   if (error) throw new Error(`Erro ao excluir arquivo: ${error.message}`);
 }
 
-module.exports = { uploadArquivo, baixarArquivo, excluirArquivo };
+async function listarArquivos(pasta) {
+  const { data, error } = await supabase.storage.from(BUCKET).list(pasta, {
+    sortBy: { column: 'created_at', order: 'desc' }
+  });
+  if (error) throw new Error(`Erro ao listar arquivos: ${error.message}`);
+  return data;
+}
+
+module.exports = { uploadArquivo, baixarArquivo, excluirArquivo, listarArquivos };

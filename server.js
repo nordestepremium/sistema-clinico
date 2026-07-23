@@ -14,6 +14,7 @@ const pagamentosRoutes = require('./routes/pagamentos');
 const despesasRoutes = require('./routes/despesas');
 const recebimentosRoutes = require('./routes/recebimentos');
 const usuariosRoutes = require('./routes/usuarios');
+const backupRoutes = require('./routes/backup');
 
 const app = express();
 
@@ -42,6 +43,7 @@ app.use('/pagamentos', pagamentosRoutes);
 app.use('/despesas', despesasRoutes);
 app.use('/recebimentos', recebimentosRoutes);
 app.use('/usuarios', usuariosRoutes);
+app.use('/sistema/backup', backupRoutes);
 
 app.get('/', (req, res) => res.json({ status: 'ok' }));
 
