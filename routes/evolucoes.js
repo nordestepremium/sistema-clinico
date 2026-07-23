@@ -18,9 +18,9 @@ router.get('/:pacienteId', async (req, res) => {
       req.clinicaId,
       `SELECT e.* FROM evolucoes e
        JOIN pacientes p ON p.id = e.paciente_id
-       WHERE e.paciente_id=$1 AND p.usuario_id=$2
+       WHERE e.paciente_id=$1 AND p.usuario_id=$2 AND e.clinica_id=$3
        ORDER BY e.data_atendimento DESC`,
-      [req.params.pacienteId, req.usuarioId]
+      [req.params.pacienteId, req.usuarioId, req.clinicaId]
     );
     const evolucoes = result.rows;
     if (evolucoes.length) {
@@ -47,7 +47,7 @@ router.get('/:pacienteId', async (req, res) => {
 router.post('/', async (req, res) => {
   const e = req.body;
   try {
-    const dono = await queryComoClinica(req.clinicaId, 'SELECT id FROM pacientes WHERE id=$1 AND usuario_id=$2', [e.paciente_id, req.usuarioId]);
+    const dono = await queryComoClinica(req.clinicaId, 'SELECT id FROM pacientes WHERE id=$1 AND usuario_id=$2 AND clinica_id=$3', [e.paciente_id, req.usuarioId, req.clinicaId]);
     if (!dono.rows[0]) return res.status(403).json({ erro: 'Paciente não encontrado ou não pertence a você.' });
 
     const result = await queryComoClinica(
@@ -68,8 +68,8 @@ router.put('/:id', async (req, res) => {
   try {
     const result = await queryComoClinica(
       req.clinicaId,
-      `UPDATE evolucoes SET data_atendimento=$1, objetivo_consulta=$2, relato=$3 WHERE id=$4 AND usuario_id=$5 RETURNING *`,
-      [e.data_atendimento, e.objetivo_consulta, e.relato, req.params.id, req.usuarioId]
+      `UPDATE evolucoes SET data_atendimento=$1, objetivo_consulta=$2, relato=$3 WHERE id=$4 AND usuario_id=$5 AND clinica_id=$6 RETURNING *`,
+      [e.data_atendimento, e.objetivo_consulta, e.relato, req.params.id, req.usuarioId, req.clinicaId]
     );
     if (!result.rows[0]) return res.status(404).json({ erro: 'Evolução não encontrada.' });
     res.json(result.rows[0]);
@@ -81,7 +81,7 @@ router.put('/:id', async (req, res) => {
 
 router.delete('/:id', async (req, res) => {
   try {
-    await queryComoClinica(req.clinicaId, 'DELETE FROM evolucoes WHERE id=$1 AND usuario_id=$2', [req.params.id, req.usuarioId]);
+    await queryComoClinica(req.clinicaId, 'DELETE FROM evolucoes WHERE id=$1 AND usuario_id=$2 AND clinica_id=$3', [req.params.id, req.usuarioId, req.clinicaId]);
     res.json({ sucesso: true });
   } catch (err) {
     console.error(err);
@@ -100,8 +100,8 @@ router.post('/:evolucaoId/documentos', async (req, res) => {
   try {
     const evolucao = await queryComoClinica(
       req.clinicaId,
-      'SELECT id, paciente_id FROM evolucoes WHERE id=$1 AND usuario_id=$2',
-      [req.params.evolucaoId, req.usuarioId]
+      'SELECT id, paciente_id FROM evolucoes WHERE id=$1 AND usuario_id=$2 AND clinica_id=$3',
+      [req.params.evolucaoId, req.usuarioId, req.clinicaId]
     );
     if (!evolucao.rows[0]) return res.status(404).json({ erro: 'Evolução não encontrada.' });
     const pacienteId = evolucao.rows[0].paciente_id;
@@ -140,8 +140,8 @@ router.get('/documentos/:docId/conteudo', async (req, res) => {
   try {
     const doc = await queryComoClinica(
       req.clinicaId,
-      'SELECT * FROM evolucao_documentos WHERE id=$1 AND usuario_id=$2',
-      [req.params.docId, req.usuarioId]
+      'SELECT * FROM evolucao_documentos WHERE id=$1 AND usuario_id=$2 AND clinica_id=$3',
+      [req.params.docId, req.usuarioId, req.clinicaId]
     );
     if (!doc.rows[0]) return res.status(404).json({ erro: 'Documento não encontrado.' });
     const buffer = await baixarArquivo(doc.rows[0].caminho_arquivo);
@@ -160,12 +160,12 @@ router.delete('/documentos/:docId', async (req, res) => {
   try {
     const doc = await queryComoClinica(
       req.clinicaId,
-      'SELECT * FROM evolucao_documentos WHERE id=$1 AND usuario_id=$2',
-      [req.params.docId, req.usuarioId]
+      'SELECT * FROM evolucao_documentos WHERE id=$1 AND usuario_id=$2 AND clinica_id=$3',
+      [req.params.docId, req.usuarioId, req.clinicaId]
     );
     if (!doc.rows[0]) return res.status(404).json({ erro: 'Documento não encontrado.' });
     await excluirArquivo(doc.rows[0].caminho_arquivo);
-    await queryComoClinica(req.clinicaId, 'DELETE FROM evolucao_documentos WHERE id=$1', [req.params.docId]);
+    await queryComoClinica(req.clinicaId, 'DELETE FROM evolucao_documentos WHERE id=$1 AND clinica_id=$2', [req.params.docId, req.clinicaId]);
     res.json({ sucesso: true });
   } catch (err) {
     console.error(err);

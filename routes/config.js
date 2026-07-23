@@ -10,7 +10,7 @@ router.use(exigirLogin);
 // Precisa vir ANTES das rotas genéricas /:chave para não ser interpretado como uma config comum.
 router.get('/logo', async (req, res) => {
   try {
-    const config = await queryComoClinica(req.clinicaId, "SELECT valor FROM configuracoes WHERE chave='logo_path'");
+    const config = await queryComoClinica(req.clinicaId, "SELECT valor FROM configuracoes WHERE chave='logo_path' AND clinica_id=$1", [req.clinicaId]);
     const caminho = config.rows[0]?.valor;
     if (!caminho) return res.json({ base64: null });
     const buffer = await baixarArquivo(caminho);
@@ -24,12 +24,12 @@ router.get('/logo', async (req, res) => {
 router.put('/logo', async (req, res) => {
   if (req.role === 'recepcao') return res.status(403).json({ erro: 'O perfil Recepção não pode alterar configurações administrativas.' });
   try {
-    const config = await queryComoClinica(req.clinicaId, "SELECT valor FROM configuracoes WHERE chave='logo_path'");
+    const config = await queryComoClinica(req.clinicaId, "SELECT valor FROM configuracoes WHERE chave='logo_path' AND clinica_id=$1", [req.clinicaId]);
     const caminhoAtual = config.rows[0]?.valor;
 
     if (!req.body.base64Data) {
       if (caminhoAtual) await excluirArquivo(caminhoAtual);
-      await queryComoClinica(req.clinicaId, "DELETE FROM configuracoes WHERE chave='logo_path'");
+      await queryComoClinica(req.clinicaId, "DELETE FROM configuracoes WHERE chave='logo_path' AND clinica_id=$1", [req.clinicaId]);
       return res.json({ sucesso: true });
     }
 
@@ -56,8 +56,8 @@ router.get('/:chave', async (req, res) => {
   try {
     const result = await queryComoClinica(
       req.clinicaId,
-      'SELECT valor FROM configuracoes WHERE chave=$1',
-      [req.params.chave]
+      'SELECT valor FROM configuracoes WHERE chave=$1 AND clinica_id=$2',
+      [req.params.chave, req.clinicaId]
     );
     res.json({ valor: result.rows[0]?.valor ?? null });
   } catch (err) {
@@ -69,7 +69,7 @@ router.get('/:chave', async (req, res) => {
 // Listar todas as configurações da clínica
 router.get('/', async (req, res) => {
   try {
-    const result = await queryComoClinica(req.clinicaId, 'SELECT chave, valor FROM configuracoes');
+    const result = await queryComoClinica(req.clinicaId, 'SELECT chave, valor FROM configuracoes WHERE clinica_id=$1', [req.clinicaId]);
     res.json(result.rows);
   } catch (err) {
     console.error(err);

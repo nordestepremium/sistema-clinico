@@ -40,9 +40,9 @@ router.get('/:pacienteId', async (req, res) => {
       req.clinicaId,
       `SELECT a.* FROM anamneses a
        JOIN pacientes p ON p.id = a.paciente_id
-       WHERE a.paciente_id=$1 AND p.usuario_id=$2
+       WHERE a.paciente_id=$1 AND p.usuario_id=$2 AND a.clinica_id=$3
        ORDER BY a.created_at DESC LIMIT 1`,
-      [req.params.pacienteId, req.usuarioId]
+      [req.params.pacienteId, req.usuarioId, req.clinicaId]
     );
     res.json(result.rows[0] || null);
   } catch (err) {
@@ -54,7 +54,7 @@ router.get('/:pacienteId', async (req, res) => {
 router.post('/', async (req, res) => {
   const body = req.body;
   try {
-    const dono = await queryComoClinica(req.clinicaId, 'SELECT id FROM pacientes WHERE id=$1 AND usuario_id=$2', [body.paciente_id, req.usuarioId]);
+    const dono = await queryComoClinica(req.clinicaId, 'SELECT id FROM pacientes WHERE id=$1 AND usuario_id=$2 AND clinica_id=$3', [body.paciente_id, req.usuarioId, req.clinicaId]);
     if (!dono.rows[0]) return res.status(403).json({ erro: 'Paciente não encontrado ou não pertence a você.' });
 
     const campos = COLUNAS.filter(c => body[c] !== undefined);
@@ -85,8 +85,8 @@ router.put('/:id', async (req, res) => {
   try {
     const result = await queryComoClinica(
       req.clinicaId,
-      `UPDATE anamneses SET ${sets}, updated_at=now() WHERE id=$${campos.length + 1} AND usuario_id=$${campos.length + 2} RETURNING *`,
-      [...valores, req.params.id, req.usuarioId]
+      `UPDATE anamneses SET ${sets}, updated_at=now() WHERE id=$${campos.length + 1} AND usuario_id=$${campos.length + 2} AND clinica_id=$${campos.length + 3} RETURNING *`,
+      [...valores, req.params.id, req.usuarioId, req.clinicaId]
     );
     if (!result.rows[0]) return res.status(404).json({ erro: 'Anamnese não encontrada.' });
     res.json(result.rows[0]);

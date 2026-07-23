@@ -17,7 +17,8 @@ router.get('/profissionais', async (req, res) => {
   try {
     const result = await queryComoClinica(
       req.clinicaId,
-      "SELECT id, nome, role FROM usuarios WHERE role != 'recepcao' ORDER BY nome"
+      "SELECT id, nome, role FROM usuarios WHERE role != 'recepcao' AND clinica_id=$1 ORDER BY nome",
+      [req.clinicaId]
     );
     res.json(result.rows);
   } catch (err) {
@@ -30,7 +31,8 @@ router.get('/', exigirAdmin, async (req, res) => {
   try {
     const result = await queryComoClinica(
       req.clinicaId,
-      'SELECT id, nome, usuario, role, created_at FROM usuarios ORDER BY nome'
+      'SELECT id, nome, usuario, role, created_at FROM usuarios WHERE clinica_id=$1 ORDER BY nome',
+      [req.clinicaId]
     );
     res.json(result.rows);
   } catch (err) {
@@ -60,7 +62,12 @@ router.post('/', exigirAdmin, async (req, res) => {
 router.put('/:id/senha', exigirAdmin, async (req, res) => {
   try {
     const hash = await bcrypt.hash(req.body.novaSenha, 12);
-    await queryComoClinica(req.clinicaId, 'UPDATE usuarios SET senha_hash=$1 WHERE id=$2', [hash, req.params.id]);
+    const result = await queryComoClinica(
+      req.clinicaId,
+      'UPDATE usuarios SET senha_hash=$1 WHERE id=$2 AND clinica_id=$3 RETURNING id',
+      [hash, req.params.id, req.clinicaId]
+    );
+    if (!result.rows[0]) return res.status(404).json({ erro: 'Usuário não encontrado.' });
     res.json({ sucesso: true });
   } catch (err) {
     console.error(err);
@@ -72,9 +79,10 @@ router.put('/:id/role', exigirAdmin, async (req, res) => {
   try {
     const result = await queryComoClinica(
       req.clinicaId,
-      'UPDATE usuarios SET role=$1 WHERE id=$2 RETURNING id, nome, usuario, role',
-      [req.body.role, req.params.id]
+      'UPDATE usuarios SET role=$1 WHERE id=$2 AND clinica_id=$3 RETURNING id, nome, usuario, role',
+      [req.body.role, req.params.id, req.clinicaId]
     );
+    if (!result.rows[0]) return res.status(404).json({ erro: 'Usuário não encontrado.' });
     res.json(result.rows[0]);
   } catch (err) {
     console.error(err);
@@ -84,7 +92,7 @@ router.put('/:id/role', exigirAdmin, async (req, res) => {
 
 router.delete('/:id', exigirAdmin, async (req, res) => {
   try {
-    await queryComoClinica(req.clinicaId, 'DELETE FROM usuarios WHERE id=$1', [req.params.id]);
+    await queryComoClinica(req.clinicaId, 'DELETE FROM usuarios WHERE id=$1 AND clinica_id=$2', [req.params.id, req.clinicaId]);
     res.json({ sucesso: true });
   } catch (err) {
     console.error(err);
@@ -96,11 +104,11 @@ router.delete('/:id', exigirAdmin, async (req, res) => {
 router.put('/minha-senha', async (req, res) => {
   const { senhaAtual, novaSenha } = req.body;
   try {
-    const atual = await queryComoClinica(req.clinicaId, 'SELECT senha_hash FROM usuarios WHERE id=$1', [req.usuarioId]);
+    const atual = await queryComoClinica(req.clinicaId, 'SELECT senha_hash FROM usuarios WHERE id=$1 AND clinica_id=$2', [req.usuarioId, req.clinicaId]);
     const ok = atual.rows[0] && await bcrypt.compare(senhaAtual, atual.rows[0].senha_hash);
     if (!ok) return res.status(401).json({ erro: 'Senha atual incorreta.' });
     const hash = await bcrypt.hash(novaSenha, 12);
-    await queryComoClinica(req.clinicaId, 'UPDATE usuarios SET senha_hash=$1 WHERE id=$2', [hash, req.usuarioId]);
+    await queryComoClinica(req.clinicaId, 'UPDATE usuarios SET senha_hash=$1 WHERE id=$2 AND clinica_id=$3', [hash, req.usuarioId, req.clinicaId]);
     res.json({ sucesso: true });
   } catch (err) {
     console.error(err);

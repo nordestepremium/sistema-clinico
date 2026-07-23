@@ -11,9 +11,9 @@ router.get('/', async (req, res) => {
     const result = await queryComoClinica(
       req.clinicaId,
       `SELECT * FROM recebimentos_status
-       WHERE usuario_id=$1 AND ($2::text IS NULL OR competencia=$2)
+       WHERE usuario_id=$1 AND clinica_id=$2 AND ($3::text IS NULL OR competencia=$3)
        ORDER BY data_agendamento`,
-      [req.usuarioId, competencia || null]
+      [req.usuarioId, req.clinicaId, competencia || null]
     );
     res.json(result.rows);
   } catch (err) {
@@ -71,8 +71,8 @@ router.put('/:id', async (req, res) => {
         pago = CASE WHEN $3 THEN $4 ELSE pago END,
         pagamento_id = CASE WHEN $5 THEN $6 ELSE pagamento_id END,
         updated_at = now()
-       WHERE id=$7 AND usuario_id=$8 RETURNING *`,
-      [temDescricao, body.descricao ?? null, temPago, !!body.pago, temPagamentoId, body.pagamentoId ?? null, req.params.id, req.usuarioId]
+       WHERE id=$7 AND usuario_id=$8 AND clinica_id=$9 RETURNING *`,
+      [temDescricao, body.descricao ?? null, temPago, !!body.pago, temPagamentoId, body.pagamentoId ?? null, req.params.id, req.usuarioId, req.clinicaId]
     );
     if (!result.rows[0]) return res.status(404).json({ erro: 'Registro não encontrado.' });
     res.json(result.rows[0]);
@@ -84,7 +84,7 @@ router.put('/:id', async (req, res) => {
 
 router.delete('/:id', async (req, res) => {
   try {
-    await queryComoClinica(req.clinicaId, 'DELETE FROM recebimentos_status WHERE id=$1 AND usuario_id=$2', [req.params.id, req.usuarioId]);
+    await queryComoClinica(req.clinicaId, 'DELETE FROM recebimentos_status WHERE id=$1 AND usuario_id=$2 AND clinica_id=$3', [req.params.id, req.usuarioId, req.clinicaId]);
     res.json({ sucesso: true });
   } catch (err) {
     console.error(err);

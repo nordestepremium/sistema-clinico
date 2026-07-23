@@ -15,9 +15,9 @@ router.get('/', async (req, res) => {
     const result = await queryComoClinica(
       req.clinicaId,
       `SELECT * FROM perguntas_dinamicas
-       WHERE usuario_id=$1 AND ($2::text IS NULL OR contexto=$2) AND ativo=true
+       WHERE usuario_id=$1 AND clinica_id=$2 AND ($3::text IS NULL OR contexto=$3) AND ativo=true
        ORDER BY categoria, ordem`,
-      [req.usuarioId, contexto || null]
+      [req.usuarioId, req.clinicaId, contexto || null]
     );
     res.json(result.rows);
   } catch (err) {
@@ -51,9 +51,9 @@ router.put('/:id', async (req, res) => {
       req.clinicaId,
       `UPDATE perguntas_dinamicas
          SET contexto=$1, categoria=$2, pergunta=$3, tipo=$4, opcoes=$5, obrigatoria=$6, ordem=$7, ativo=true, updated_at=now()
-       WHERE id=$8 AND usuario_id=$9 RETURNING *`,
+       WHERE id=$8 AND usuario_id=$9 AND clinica_id=$10 RETURNING *`,
       [p.contexto, p.categoria, p.pergunta, p.tipo || 'textarea', p.opcoes || null,
-       !!p.obrigatoria, p.ordem || 0, req.params.id, req.usuarioId]
+       !!p.obrigatoria, p.ordem || 0, req.params.id, req.usuarioId, req.clinicaId]
     );
     if (!result.rows[0]) return res.status(404).json({ erro: 'Pergunta não encontrada.' });
     res.json(result.rows[0]);
@@ -67,8 +67,8 @@ router.delete('/:id', async (req, res) => {
   try {
     await queryComoClinica(
       req.clinicaId,
-      'UPDATE perguntas_dinamicas SET ativo=false WHERE id=$1 AND usuario_id=$2',
-      [req.params.id, req.usuarioId]
+      'UPDATE perguntas_dinamicas SET ativo=false WHERE id=$1 AND usuario_id=$2 AND clinica_id=$3',
+      [req.params.id, req.usuarioId, req.clinicaId]
     );
     res.json({ sucesso: true });
   } catch (err) {
