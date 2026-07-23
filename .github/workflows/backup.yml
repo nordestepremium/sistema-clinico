@@ -1,0 +1,16 @@
+name: Backup diário do banco
+
+on:
+  schedule:
+    # 06:00 UTC = 03:00 no horário de Brasília (sem horário de verão)
+    - cron: '0 6 * * *'
+  workflow_dispatch: {} # permite rodar manualmente pela aba "Actions" do GitHub, se quiser testar
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Chamar a rota de backup
+        run: |
+          curl -f -X POST "https://sistema-clinico-jyml.onrender.com/sistema/backup" \
+            -H "x-backup-secret: ${{ secrets.BACKUP_SECRET }}"
