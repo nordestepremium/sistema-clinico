@@ -16,6 +16,7 @@ const despesasRoutes = require('./routes/despesas');
 const recebimentosRoutes = require('./routes/recebimentos');
 const usuariosRoutes = require('./routes/usuarios');
 const backupRoutes = require('./routes/backup');
+const agendaRoutes = require('./routes/agenda');
 
 // Rede de segurança: um erro inesperado em algum lugar não deve derrubar o
 // servidor inteiro. Só registra no log e segue rodando.
@@ -50,6 +51,7 @@ app.use('/despesas', despesasRoutes);
 app.use('/recebimentos', recebimentosRoutes);
 app.use('/usuarios', usuariosRoutes);
 app.use('/sistema/backup', backupRoutes);
+app.use('/agenda', agendaRoutes);
 
 app.get('/', (req, res) => res.json({ status: 'ok' }));
 
