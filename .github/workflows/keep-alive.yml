@@ -1,0 +1,13 @@
+name: Manter servidor acordado
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: "*/10 * * * *"
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Chamar a rota de keep-alive
+        run: curl -f "https://sistema-clinico-jyml.onrender.com/keep-alive"
