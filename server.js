@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const { pool } = require('./db');
 
 const authRoutes = require('./routes/auth');
 const pacientesRoutes = require('./routes/pacientes');
@@ -15,6 +16,11 @@ const despesasRoutes = require('./routes/despesas');
 const recebimentosRoutes = require('./routes/recebimentos');
 const usuariosRoutes = require('./routes/usuarios');
 const backupRoutes = require('./routes/backup');
+
+// Rede de segurança: um erro inesperado em algum lugar não deve derrubar o
+// servidor inteiro. Só registra no log e segue rodando.
+process.on('unhandledRejection', (err) => console.error('Erro não tratado (promise):', err));
+process.on('uncaughtException', (err) => console.error('Erro não tratado (exception):', err));
 
 const app = express();
 
@@ -46,6 +52,19 @@ app.use('/usuarios', usuariosRoutes);
 app.use('/sistema/backup', backupRoutes);
 
 app.get('/', (req, res) => res.json({ status: 'ok' }));
+
+// Usada por um robô externo (a cada poucos minutos) para o servidor nunca ficar
+// tempo demais sem uso e "dormir". Faz uma consulta bem leve ao banco de propósito,
+// pra também manter o projeto do Supabase ativo (ele pausa sozinho após dias sem uso).
+app.get('/keep-alive', async (req, res) => {
+  try {
+    await pool.query('SELECT 1');
+    res.json({ status: 'ok', em: new Date().toISOString() });
+  } catch (err) {
+    console.error('Erro no keep-alive:', err);
+    res.status(500).json({ status: 'erro' });
+  }
+});
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`API rodando na porta ${PORT}`));
