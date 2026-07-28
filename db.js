@@ -11,11 +11,16 @@ const pool = new Pool({
 // Executa uma query JÁ TRAVADA na clínica do usuário logado.
 // Isso ativa a regra de segurança (RLS) do banco: mesmo que o código erre,
 // o banco físicamente não deixa ver dados de outra clínica.
+//
+// Otimização: "BEGIN" e "SET LOCAL" são combinados numa única ida ao banco
+// (o Postgres aceita várias instruções separadas por ; numa única mensagem,
+// desde que nenhuma delas use parâmetros — não é o caso dessas duas).
+// Isso corta 1 ida-e-volta a cada consulta, o que importa bastante quando
+// o servidor e o banco estão em regiões geográficas diferentes.
 async function queryComoClinica(clinicaId, text, params = []) {
   const client = await pool.connect();
   try {
-    await client.query('BEGIN');
-    await client.query(`SET LOCAL app.clinica_id = '${clinicaId}'`);
+    await client.query(`BEGIN; SET LOCAL app.clinica_id = '${clinicaId}';`);
     const result = await client.query(text, params);
     await client.query('COMMIT');
     return result;
