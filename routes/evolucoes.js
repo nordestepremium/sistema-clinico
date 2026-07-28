@@ -68,7 +68,7 @@ router.put('/:id', async (req, res) => {
   try {
     const result = await queryComoClinica(
       req.clinicaId,
-      `UPDATE evolucoes SET data_atendimento=$1, objetivo_consulta=$2, relato=$3 WHERE id=$4 AND usuario_id=$5 AND clinica_id=$6 RETURNING *`,
+      `UPDATE evolucoes SET data_atendimento=$1, objetivo_consulta=$2, relato=$3, updated_at=now() WHERE id=$4 AND usuario_id=$5 AND clinica_id=$6 RETURNING *`,
       [e.data_atendimento, e.objetivo_consulta, e.relato, req.params.id, req.usuarioId, req.clinicaId]
     );
     if (!result.rows[0]) return res.status(404).json({ erro: 'Evolução não encontrada.' });
@@ -88,8 +88,6 @@ router.delete('/:id', async (req, res) => {
     res.status(500).json({ erro: 'Erro ao excluir evolução.' });
   }
 });
-
-module.exports = router;
 
 // ── Documentos anexados (Supabase Storage) ──────────────────
 
@@ -128,6 +126,7 @@ router.post('/:evolucaoId/documentos', async (req, res) => {
       );
       inseridos.push(result.rows[0]);
     }
+    await queryComoClinica(req.clinicaId, 'UPDATE evolucoes SET updated_at=now() WHERE id=$1 AND clinica_id=$2', [req.params.evolucaoId, req.clinicaId]);
     res.status(201).json({ documentos: inseridos });
   } catch (err) {
     console.error(err);
@@ -166,6 +165,7 @@ router.delete('/documentos/:docId', async (req, res) => {
     if (!doc.rows[0]) return res.status(404).json({ erro: 'Documento não encontrado.' });
     await excluirArquivo(doc.rows[0].caminho_arquivo);
     await queryComoClinica(req.clinicaId, 'DELETE FROM evolucao_documentos WHERE id=$1 AND clinica_id=$2', [req.params.docId, req.clinicaId]);
+    await queryComoClinica(req.clinicaId, 'UPDATE evolucoes SET updated_at=now() WHERE id=$1 AND clinica_id=$2', [doc.rows[0].evolucao_id, req.clinicaId]);
     res.json({ sucesso: true });
   } catch (err) {
     console.error(err);
