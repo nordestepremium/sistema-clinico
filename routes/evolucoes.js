@@ -52,9 +52,11 @@ router.post('/', async (req, res) => {
 
     const result = await queryComoClinica(
       req.clinicaId,
-      `INSERT INTO evolucoes (clinica_id, usuario_id, paciente_id, data_atendimento, objetivo_consulta, relato)
-       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
-      [req.clinicaId, req.usuarioId, e.paciente_id, e.data_atendimento, e.objetivo_consulta, e.relato]
+      `INSERT INTO evolucoes (clinica_id, usuario_id, paciente_id, data_atendimento, objetivo_consulta, relato,
+         intervencoes_realizadas, tarefas_casa, objetivos_proxima_sessao, encaminhamentos)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+      [req.clinicaId, req.usuarioId, e.paciente_id, e.data_atendimento, e.objetivo_consulta, e.relato,
+       e.intervencoes_realizadas || null, e.tarefas_casa || null, e.objetivos_proxima_sessao || null, e.encaminhamentos || null]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
@@ -68,8 +70,12 @@ router.put('/:id', async (req, res) => {
   try {
     const result = await queryComoClinica(
       req.clinicaId,
-      `UPDATE evolucoes SET data_atendimento=$1, objetivo_consulta=$2, relato=$3, updated_at=now() WHERE id=$4 AND usuario_id=$5 AND clinica_id=$6 RETURNING *`,
-      [e.data_atendimento, e.objetivo_consulta, e.relato, req.params.id, req.usuarioId, req.clinicaId]
+      `UPDATE evolucoes SET data_atendimento=$1, objetivo_consulta=$2, relato=$3,
+         intervencoes_realizadas=$4, tarefas_casa=$5, objetivos_proxima_sessao=$6, encaminhamentos=$7,
+         updated_at=now() WHERE id=$8 AND usuario_id=$9 AND clinica_id=$10 RETURNING *`,
+      [e.data_atendimento, e.objetivo_consulta, e.relato,
+       e.intervencoes_realizadas || null, e.tarefas_casa || null, e.objetivos_proxima_sessao || null, e.encaminhamentos || null,
+       req.params.id, req.usuarioId, req.clinicaId]
     );
     if (!result.rows[0]) return res.status(404).json({ erro: 'Evolução não encontrada.' });
     res.json(result.rows[0]);
