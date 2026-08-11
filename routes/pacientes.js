@@ -5,6 +5,25 @@ const { exigirLogin } = require('../middleware/auth');
 const router = express.Router();
 router.use(exigirLogin); // toda rota abaixo exige login
 
+// Verifica se um CPF já está cadastrado NESTA clínica (independente de qual
+// profissional cadastrou) — usado para avisar em tempo real no formulário,
+// já que o CPF precisa ser único por clínica. Não revela de quem é o cadastro.
+router.get('/verificar-cpf/:cpf', async (req, res) => {
+  try {
+    const cpfDigits = String(req.params.cpf || '').replace(/\D/g, '');
+    if (cpfDigits.length !== 11) return res.status(400).json({ erro: 'CPF inválido.' });
+    const result = await queryComoClinica(
+      req.clinicaId,
+      'SELECT id FROM pacientes WHERE cpf=$1 AND clinica_id=$2 LIMIT 1',
+      [cpfDigits, req.clinicaId]
+    );
+    res.json({ existe: !!result.rows[0] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ erro: 'Erro ao verificar CPF.' });
+  }
+});
+
 // Listar pacientes: cada profissional só vê os que ele mesmo cadastrou.
 // Recepção vê todos os pacientes da clínica (para agendar e cadastrar novos).
 router.get('/', async (req, res) => {
@@ -68,17 +87,18 @@ router.put('/:id', async (req, res) => {
     const result = await queryComoClinica(
       req.clinicaId,
       `UPDATE pacientes SET
-        nome_completo=$1, sexo=$2, data_nascimento=$3, idade=$4, telefone=$5,
-        contato_emergencia=$6, nome_contato_emergencia=$7, valor_sessao=$8,
-        dynamic_answers_json=$9, updated_at=now()
-       WHERE id=$10 AND usuario_id=$11 AND clinica_id=$12 RETURNING *`,
-      [p.nome_completo, p.sexo, p.data_nascimento, p.idade || null, p.telefone,
+        nome_completo=$1, cpf=$2, sexo=$3, data_nascimento=$4, idade=$5, telefone=$6,
+        contato_emergencia=$7, nome_contato_emergencia=$8, valor_sessao=$9,
+        dynamic_answers_json=$10, updated_at=now()
+       WHERE id=$11 AND usuario_id=$12 AND clinica_id=$13 RETURNING *`,
+      [p.nome_completo, p.cpf, p.sexo, p.data_nascimento, p.idade || null, p.telefone,
        p.contato_emergencia, p.nome_contato_emergencia, p.valor_sessao || null,
        p.dynamic_answers_json || '{}', req.params.id, req.usuarioId, req.clinicaId]
     );
     if (!result.rows[0]) return res.status(404).json({ erro: 'Paciente não encontrado.' });
     res.json(result.rows[0]);
   } catch (err) {
+    if (err.code === '23505') return res.status(409).json({ erro: 'Esse CPF já está cadastrado em outro paciente desta clínica.' });
     console.error(err);
     res.status(500).json({ erro: 'Erro ao atualizar paciente.' });
   }
