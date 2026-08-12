@@ -32,6 +32,8 @@ function normalizeAgendaPatient(raw = {}) {
   };
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 function mergeAgendaPatients(...groups) {
   const merged = new Map();
   groups.flat().forEach(item => {
@@ -40,7 +42,13 @@ function mergeAgendaPatients(...groups) {
     if (!normalized.name) return;
     const key = normalized.cpf || `id:${normalized.id}`;
     const previous = merged.get(key) || {};
-    merged.set(key, { ...previous, ...normalized, id: previous.id || normalized.id });
+    // O ID de verdade do paciente (UUID) sempre prevalece sobre um ID antigo
+    // de contato da agenda (de antes de existir o cadastro completo) —
+    // independente de qual dos dois foi processado primeiro.
+    let idFinal = previous.id || normalized.id;
+    if (UUID_RE.test(normalized.id)) idFinal = normalized.id;
+    else if (UUID_RE.test(previous.id)) idFinal = previous.id;
+    merged.set(key, { ...previous, ...normalized, id: idFinal });
   });
   return [...merged.values()].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
 }
@@ -205,22 +213,39 @@ router.get('/', async (req, res) => {
     if (!Array.isArray(apts)) apts = [];
     const cfg = normalizeAgendaConfig(safeJsonParse(cfgValor, null));
 
-    const idsValidos = new Set(profissionais.map(p => String(p.id)));
-    let precisaSalvar = false;
-    apts = apts.map(apt => {
-      if (!apt) return apt;
-      if (!idsValidos.has(String(apt.professionalId))) {
-        precisaSalvar = true;
-        return { ...apt, professionalId: req.usuarioId };
-      }
-      return apt;
-    });
-    if (precisaSalvar) await salvarConfig(req.clinicaId, clinicConfigKey('agenda_apts'), JSON.stringify(apts));
-
     const pacsMerged = mergeAgendaPatients(
       pacs,
       pacientesCloud.map(p => ({ id: p.id, name: p.nome_completo, wa: p.telefone, birth: p.data_nascimento, cpf: p.cpf }))
     );
+
+    const idsValidos = new Set(profissionais.map(p => String(p.id)));
+    let precisaSalvar = false;
+
+    // Corrige agendamentos antigos que ainda apontam pro ID de um contato de
+    // agenda de antes de existir o cadastro completo do paciente — sem isso,
+    // "Iniciar Atendimento" não encontrava o prontuário de verdade.
+    const mapaIdAntigoParaNovo = new Map();
+    pacs.forEach(rawPac => {
+      const norm = normalizeAgendaPatient(rawPac);
+      if (!norm.cpf) return;
+      const atual = pacsMerged.find(m => m.cpf === norm.cpf);
+      if (atual && String(atual.id) !== String(norm.id)) mapaIdAntigoParaNovo.set(String(norm.id), atual.id);
+    });
+
+    apts = apts.map(apt => {
+      if (!apt) return apt;
+      let novoApt = apt;
+      if (!idsValidos.has(String(novoApt.professionalId))) {
+        precisaSalvar = true;
+        novoApt = { ...novoApt, professionalId: req.usuarioId };
+      }
+      if (mapaIdAntigoParaNovo.has(String(novoApt.patId))) {
+        precisaSalvar = true;
+        novoApt = { ...novoApt, patId: mapaIdAntigoParaNovo.get(String(novoApt.patId)) };
+      }
+      return novoApt;
+    });
+    if (precisaSalvar) await salvarConfig(req.clinicaId, clinicConfigKey('agenda_apts'), JSON.stringify(apts));
 
     res.json({ pacs: pacsMerged, apts, cfg, professionals: profissionais });
   } catch (err) {
