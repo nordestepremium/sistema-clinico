@@ -66,6 +66,12 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
         const jaExiste = await pool.query('SELECT id FROM clinicas WHERE stripe_customer_id=$1', [session.customer]);
         if (jaExiste.rows[0]) break; // evita duplicar se o Stripe reenviar o mesmo evento
 
+        const emailJaCadastrado = await pool.query('SELECT id FROM usuarios WHERE usuario=$1', [String(email || '').toLowerCase()]);
+        if (emailJaCadastrado.rows[0]) {
+          console.error(`[billing] E-mail "${email}" já tem cadastro no sistema — pagamento aprovado, mas não foi possível criar uma clínica nova automaticamente. Verifique manualmente.`);
+          break;
+        }
+
         const { senhaProvisoria } = await provisionarClinica({
           email, nome,
           stripeCustomerId: session.customer,
