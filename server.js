@@ -36,6 +36,14 @@ app.use(cors({
 }));
 app.options('*', cors()); // responde manualmente qualquer checagem de "preflight"
 
+// Nunca deixa o navegador guardar respostas em cache. Sem isso, ao trocar de
+// usuário/clínica no mesmo navegador, dados antigos (como logo e configurações)
+// podiam "vazar" de uma sessão pra outra por causa do cache do próprio navegador.
+app.use((req, res, next) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  next();
+});
+
 // O webhook do Stripe precisa vir ANTES do express.json() — ele exige o corpo
 // "cru" da requisição pra conferir a assinatura de segurança do evento.
 app.use('/billing', billingRoutes);
