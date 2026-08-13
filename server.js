@@ -17,6 +17,7 @@ const recebimentosRoutes = require('./routes/recebimentos');
 const usuariosRoutes = require('./routes/usuarios');
 const backupRoutes = require('./routes/backup');
 const agendaRoutes = require('./routes/agenda');
+const billingRoutes = require('./routes/billing');
 
 // Rede de segurança: um erro inesperado em algum lugar não deve derrubar o
 // servidor inteiro. Só registra no log e segue rodando.
@@ -34,6 +35,11 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.options('*', cors()); // responde manualmente qualquer checagem de "preflight"
+
+// O webhook do Stripe precisa vir ANTES do express.json() — ele exige o corpo
+// "cru" da requisição pra conferir a assinatura de segurança do evento.
+app.use('/billing', billingRoutes);
+
 app.use(express.json({ limit: '5mb' }));
 
 // Limita tentativas de login para dificultar ataques de força bruta
