@@ -43,7 +43,11 @@ router.post('/login', async (req, res) => {
   const { email, senha } = req.body;
   try {
     const result = await pool.query(
-      'SELECT id, clinica_id, nome, usuario, senha_hash, role FROM usuarios WHERE usuario = $1',
+      `SELECT u.id, u.clinica_id, u.nome, u.usuario, u.senha_hash, u.role,
+              c.assinatura_status, c.acesso_expira_em
+         FROM usuarios u
+         JOIN clinicas c ON c.id = u.clinica_id
+        WHERE u.usuario = $1`,
       [String(email || '').toLowerCase()]
     );
     const usuario = result.rows[0];
@@ -51,6 +55,17 @@ router.post('/login', async (req, res) => {
 
     const senhaOk = await bcrypt.compare(senha, usuario.senha_hash);
     if (!senhaOk) return res.status(401).json({ erro: 'Usuário ou senha inválidos.' });
+
+    // acesso_expira_em = null é tratado como "sem vencimento" (clínicas antigas,
+    // criadas antes do controle de assinatura existir). As demais precisam estar
+    // com status "ativa" e dentro do prazo pago.
+    const expirado = usuario.acesso_expira_em && new Date(usuario.acesso_expira_em) < new Date();
+    if (usuario.assinatura_status !== 'ativa' || expirado) {
+      return res.status(402).json({
+        erro: 'Sua assinatura está inativa ou vencida. Renove o acesso para continuar usando o sistema.',
+        assinaturaStatus: usuario.assinatura_status
+      });
+    }
 
     const token = jwt.sign(
       { usuarioId: usuario.id, clinicaId: usuario.clinica_id, role: usuario.role },
